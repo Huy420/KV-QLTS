@@ -1,0 +1,10 @@
+{
+  "dotnetAcquisitionExtension.existingDotnetPath": [
+    { "extensionId": "ms-dotnettools.csdevkit", "path": "D:\\project_KV_KiemKeTS\\.tools\\dotnet\\dotnet.exe" },
+    { "extensionId": "ms-dotnettools.csharp", "path": "D:\\project_KV_KiemKeTS\\.tools\\dotnet\\dotnet.exe" }
+  ],
+  "terminal.integrated.env.windows": {
+    "DOTNET_ROOT": "${workspaceFolder}\\.tools\\dotnet",
+    "PATH": "${workspaceFolder}\\.tools\\dotnet;${env:PATH}"
+  }
+}
