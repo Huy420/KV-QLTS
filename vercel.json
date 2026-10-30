@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "container",
+  "env": {
+    "PORT": "8080",
+    "DataProtection__PersistToDatabase": "true",
+    "AllowedHosts": "*.vercel.app;localhost;127.0.0.1"
+  }
+}

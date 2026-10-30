@@ -1,0 +1,10 @@
+**
+!KieuViet.Assets.csproj
+!Program.cs
+!Models.cs
+!Rules.cs
+!Security.cs
+!ExcelEndpoints.cs
+!appsettings.json
+!wwwroot/
+!wwwroot/**

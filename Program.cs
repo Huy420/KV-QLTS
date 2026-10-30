@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using KieuViet;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
@@ -9,6 +10,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AssetDb>(o => o.UseSqlServer(builder.Configuration.GetConnectionString("Assets")));
+if (builder.Configuration.GetValue<bool>("DataProtection:PersistToDatabase") || Environment.GetEnvironmentVariable("VERCEL") == "1")
+    builder.Services.AddDataProtection().SetApplicationName("KieuViet.Assets").PersistKeysToDbContext<AssetDb>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
 {
     o.Cookie.Name = "KV.Assets";
@@ -69,6 +72,18 @@ if (args.Contains("--init-db"))
     if (string.IsNullOrWhiteSpace(password) || password.Length < 12 || password.Length > 256)
         throw new InvalidOperationException("Đặt KV_ADMIN_PASSWORD từ 12 đến 256 ký tự trước khi khởi tạo.");
     await db.Database.EnsureCreatedAsync();
+    // Existing local installations predate shared key storage. Add only this table;
+    // do not modify asset tables or overwrite accounts during explicit initialization.
+    await db.Database.ExecuteSqlRawAsync("""
+        IF OBJECT_ID(N'[dbo].[DataProtectionKeys]', N'U') IS NULL
+        BEGIN
+            CREATE TABLE [dbo].[DataProtectionKeys] (
+                [Id] int IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                [FriendlyName] nvarchar(max) NULL,
+                [Xml] nvarchar(max) NULL
+            );
+        END
+        """);
     if (!await db.Users.AnyAsync())
     {
         db.Users.Add(new AppUser { Username = "admin", DisplayName = "Quản trị viên", Role = "Admin", PasswordHash = Passwords.Hash(password) });

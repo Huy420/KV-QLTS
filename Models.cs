@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 
 namespace KieuViet;
@@ -63,8 +64,9 @@ public class AuditEntry
     [MaxLength(100)] public string Action { get; set; } = "";
     [MaxLength(4000)] public string Detail { get; set; } = "";
 }
-public class AssetDb(DbContextOptions<AssetDb> options) : DbContext(options)
+public class AssetDb(DbContextOptions<AssetDb> options) : DbContext(options), IDataProtectionKeyContext
 {
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<InventorySession> Sessions => Set<InventorySession>();
     public DbSet<InventoryItem> Items => Set<InventoryItem>();

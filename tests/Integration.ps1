@@ -1,16 +1,19 @@
-param([string]$SqlServer = '.\SQLEXPRESS', [int]$Port = 5089)
+param([string]$SqlServer = '.\SQLEXPRESS', [int]$Port = 5089, [ValidateSet('Debug','Release')][string]$Configuration='Debug')
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 $root = (Get-Location).Path
 $dotnetPath = Join-Path $root '.tools\dotnet\dotnet.exe'
 if (-not (Test-Path -LiteralPath $dotnetPath)) { $dotnetPath = (Get-Command dotnet).Source }
-$dll = Join-Path $root 'bin\Debug\net10.0\KieuViet.Assets.dll'
+$relativeDll = "bin\$Configuration\net10.0\KieuViet.Assets.dll"
+$dll = Join-Path $root $relativeDll
 if (-not (Test-Path -LiteralPath $dll)) { throw 'Run dotnet build first.' }
 $database = 'KVAssets_Test_' + [guid]::NewGuid().ToString('N').Substring(0, 12)
 $password = [guid]::NewGuid().ToString('N') + '!aA1'
 $previousConnection = $env:ConnectionStrings__Assets
 $previousEnvironment = $env:ASPNETCORE_ENVIRONMENT
 $previousPassword = $env:KV_ADMIN_PASSWORD
+$previousPersistence = $env:DataProtection__PersistToDatabase
+$env:DataProtection__PersistToDatabase = 'true'
 $env:ConnectionStrings__Assets = "Server=$SqlServer;Database=$database;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:KV_ADMIN_PASSWORD = $password
@@ -71,7 +74,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Database initialization failed.' }
     Remove-Item Env:KV_ADMIN_PASSWORD
     $outLog=Join-Path $root '.tools\integration-server.log'; $errLog=Join-Path $root '.tools\integration-server-error.log'
-    $process=Start-Process -FilePath $dotnetPath -ArgumentList @('bin\Debug\net10.0\KieuViet.Assets.dll','--urls',$base) -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $process=Start-Process -FilePath $dotnetPath -ArgumentList @($relativeDll,'--urls',$base) -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
     $ready=$false
     for($i=0;$i -lt 30;$i++) { try { $null=Invoke-WebRequest ($base+'/api/csrf') -UseBasicParsing; $ready=$true; break } catch { Start-Sleep -Milliseconds 500 } }
     Assert $ready 'Server started'
@@ -129,6 +132,13 @@ try {
     $null=Call ('/assets/'+$created.id+'?version='+[uri]::EscapeDataString($updated.version)) 'DELETE' $null 204
     Assert (@(Call '/assets'|Where-Object code -eq 'TEST-001').Count -eq 0) 'Archived asset hidden from active catalog'
     Assert (@(Call ('/sessions/'+$s.id+'/items')).Count -eq 1) 'Archived asset inventory history retained'
+    Stop-Process -Id $process.Id
+    $process.WaitForExit()
+    $process=Start-Process -FilePath $dotnetPath -ArgumentList @($relativeDll,'--urls',$base) -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $ready=$false
+    for($i=0;$i -lt 30;$i++){try{$null=Invoke-WebRequest ($base+'/') -UseBasicParsing -TimeoutSec 2;$ready=$true;break}catch{Start-Sleep -Milliseconds 500}}
+    Assert $ready 'Server restarted with database-backed keys'
+    Assert ((Call '/me').username -eq 'admin') 'Authentication cookie survives process restart'
     $null=Call '/logout' 'POST' $null 204
     $null=Call '/assets' 'GET' $null 401
     Write-Host "SUCCESS: $script:passed checks. Isolated database retained: $database"
@@ -137,4 +147,5 @@ try {
     $env:ConnectionStrings__Assets=$previousConnection
     $env:ASPNETCORE_ENVIRONMENT=$previousEnvironment
     $env:KV_ADMIN_PASSWORD=$previousPassword
+    $env:DataProtection__PersistToDatabase=$previousPersistence
 }
